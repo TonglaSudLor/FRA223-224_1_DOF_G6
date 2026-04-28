@@ -252,3 +252,6 @@ java.lang.Exception: Could not delete metadata for '/PID'.
 
 !ENTRY org.eclipse.cdt.core 1 0 2026-04-29 03:19:11.536
 !MESSAGE Indexed 'PID' (27 sources, 129 headers) in 2.97 sec: 14,960 declarations; 81,133 references; 3 unresolved inclusions; 46 syntax errors; 171 unresolved names (0.18%)
+
+!ENTRY org.eclipse.cdt.core 1 0 2026-04-29 03:20:53.796
+!MESSAGE Indexed 'SPI' (23 sources, 115 headers) in 2.34 sec: 10,724 declarations; 43,948 references; 7 unresolved inclusions; 1,115 syntax errors; 1,455 unresolved names (2.6%)
