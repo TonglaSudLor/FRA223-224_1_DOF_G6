@@ -22,6 +22,18 @@ typedef enum {
 } Motor_Control_Mode_t;
 
 typedef enum {
+    CONTROL_MODE_BASE_SYSTEM = 0,
+    CONTROL_MODE_JOYSTICK = 1
+} Control_System_Mode_t;
+
+typedef enum {
+    FAULT_NONE = 0x00,
+    FAULT_MOTOR_STALLED = 0x01,
+    FAULT_ENCODER_ERROR = 0x02,
+    FAULT_JOYSTICK_LOST = 0x04
+} Fault_Code_t;
+
+typedef enum {
     JOG_COARSE = 0,
     JOG_FINE = 1
 } Jog_Mode_t;
@@ -92,6 +104,7 @@ typedef struct {
 
 /* --- Public Variables (For Live Expressions) --- */
 extern volatile Motor_Control_Mode_t current_mode;
+extern volatile Control_System_Mode_t control_system_mode;
 extern volatile Jog_Mode_t jog_mode;
 extern volatile Autotune_Trigger_t autotune_trigger;
 extern volatile Autotune_Status_t autotune_status;
@@ -99,6 +112,8 @@ extern volatile int tuning_progress;
 extern volatile Tuning_Params_t tuning;
 extern volatile bool is_joystick_connected;
 extern volatile bool Emergency_stop;
+extern volatile bool safety_enabled;
+extern volatile Fault_Code_t fault_code;
 extern volatile float target_position_deg;
 extern volatile float buffered_target_pos;   /**< The "Ghost" target for S-curve testing */
 extern volatile bool ghost_move_active;
@@ -170,6 +185,12 @@ void Motor_UpdateSelectionButton(bool pressed);
  * @param pressed true ถ้าปุ่ม M ถูกกด
  */
 void Motor_UpdateModeButton(bool pressed);
+
+/**
+ * @brief อัปเดตสถานะปุ่ม Control Mode (B) เพื่อตรวจจับการกดค้าง
+ * @param pressed true ถ้าปุ่ม B ถูกกด
+ */
+void Motor_UpdateControlModeButton(bool pressed);
 
 /**
  * @brief อัปเดตสถานะการเชื่อมต่อของ Joystick

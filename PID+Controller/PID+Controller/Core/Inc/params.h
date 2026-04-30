@@ -25,8 +25,8 @@
  * MOTION & JOG SPEEDS
  * ============================================================================ */
 
-#define JOG_SPEED_FINE      20.0f
-#define MOVE_SPEED_COARSE   100.0f  /**< As requested from image */
+#define JOG_SPEED_FINE      5.0f
+#define MOVE_SPEED_COARSE   30.0f  /**< As requested from image */
 
 #define STEP_SIZE_COARSE    10.0f
 #define STEP_SIZE_FINE      1.0f
@@ -43,6 +43,18 @@
 
 #define DEFAULT_MIN_PWM     3.0f
 #define DEFAULT_MAX_ACCEL   200.0f  /**< Lowered for smoother stopping */
+
+/* ============================================================================
+ * SAFETY PROTOCOLS
+ * ============================================================================ */
+
+#define STALL_PWM_THRESHOLD      15.0f   /**< PWM > 15% but not moving? Likely stalled */
+#define STALL_VELOCITY_THRESHOLD 1.0f    /**< RPM < 1.0 */
+#define STALL_TIME_MS            1000    /**< Duration before triggering (ms) */
+#define STALL_SETTLING_ERROR_DEG 2.0f    /**< Don't trigger if error < 2.0 deg (Settling) */
+
+#define ENCODER_FAULT_PWM_THRESHOLD 25.0f   /**< PWM threshold for hardware check */
+#define ENCODER_INVERSION_RPM_LIMIT 5.0f    /**< RPM threshold for inversion check */
 
 /* ============================================================================
  * SYSTEM TIMING

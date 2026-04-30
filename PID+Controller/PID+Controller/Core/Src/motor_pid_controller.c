@@ -17,6 +17,7 @@ extern TIM_HandleTypeDef htim6;
 extern TIM_HandleTypeDef htim8;
 
 volatile Motor_Control_Mode_t current_mode = MOTOR_MODE_STOPPED;
+volatile Control_System_Mode_t control_system_mode = CONTROL_MODE_BASE_SYSTEM;
 volatile Jog_Mode_t jog_mode = JOG_COARSE;
 volatile Autotune_Trigger_t autotune_trigger = ATUNE_IDLE;
 volatile Autotune_Status_t autotune_status = STATUS_IDLE;
@@ -24,6 +25,8 @@ volatile int tuning_progress = 0;
 volatile Tuning_Params_t tuning;
 volatile bool is_joystick_connected = false;
 volatile bool Emergency_stop = false;
+volatile bool safety_enabled = true;
+volatile Fault_Code_t fault_code = FAULT_NONE;
 volatile float target_position_deg = 0.0f;
 volatile float buffered_target_pos = 0.0f;
 volatile bool ghost_move_active = false;
@@ -38,8 +41,13 @@ static uint32_t m_button_hold_tick = 0;
 static bool m_button_active = false;
 static uint32_t y_button_hold_tick = 0;
 static bool y_button_active = false;
+static uint32_t b_button_hold_tick = 0;
+static bool b_button_active = false;
 static float last_rpm_for_accel = 0.0f;
 static uint32_t a_press_tick = 0;    
+static uint32_t stall_timer = 0;
+static uint32_t encoder_fault_timer = 0;
+static int32_t last_absolute_counts = 0;
 static bool a_button_is_held = false;
 static bool returning_home = false;
 
@@ -200,6 +208,18 @@ void Motor_UpdateModeButton(bool pressed)
     }
 }
 
+void Motor_UpdateControlModeButton(bool pressed)
+{
+    if (pressed) {
+        if (!b_button_active) {
+            b_button_hold_tick = HAL_GetTick();
+            b_button_active = true;
+        }
+    } else {
+        b_button_active = false;
+    }
+}
+
 void Motor_SetConnectionStatus(bool connected) { is_joystick_connected = connected; }
 
 void Motor_SendDataToMatlab(void)
@@ -262,6 +282,7 @@ void Motor_StartAutotuneSpeed(void)
 
 void Motor_ProcessCommand(char cmd)
 {
+    // PRIORITY 1: Emergency Stop Reset (Always allowed)
     if (cmd == 'P') {
         if (!Emergency_stop) { 
             Emergency_stop = true; 
@@ -270,27 +291,46 @@ void Motor_ProcessCommand(char cmd)
                 ghost_dump_requested = true;
             }
         } 
-        else { Emergency_stop = false; current_mode = MOTOR_MODE_STOPPED; }
+        else { 
+            Emergency_stop = false; 
+            fault_code = FAULT_NONE; // Clear all fault bits
+            current_mode = MOTOR_MODE_STOPPED; 
+        }
         trajectory.current_setpoint_vel = 0.0f;
         trajectory.current_setpoint_pos = encoder.current_position_deg;
         trajectory.target_pos = encoder.current_position_deg;
         pid_speed.integral = 0.0f; pid_position.integral = 0.0f;
         return;
     }
-    if (Emergency_stop) return;
+
+    // PRIORITY 2: Mode & Configuration Buttons (Allowed during Emergency Stop)
+    // This allows user to change jog mode or reset home even if system is locked
     if (cmd == 'A') {
         if (!a_button_is_held) { a_press_tick = HAL_GetTick(); a_button_is_held = true; returning_home = false; }
     }
+    
+    if (cmd == 'M') { 
+        if (jog_mode == JOG_COARSE) { jog_mode = JOG_FINE; resolution_step = tuning.step_size_fine; } 
+        else { jog_mode = JOG_COARSE; resolution_step = tuning.step_size_coarse; }
+        return; 
+    }
+
+    // PRIORITY 3: Base System Lock (Ignore motion if in Base System Mode)
+    if (control_system_mode == CONTROL_MODE_BASE_SYSTEM) return;
+
+    // PRIORITY 4: Motion Commands (Blocked if Emergency Stop is Active)
+    if (Emergency_stop) return;
+
     switch (cmd)
     {
-    case 'L': // Now Decrements (Moves Left/Negative)
+    case 'L': 
         if (current_mode == MOTOR_MODE_GHOST) {
             buffered_target_pos -= resolution_step;
         } else if (jog_mode == JOG_COARSE) {
             if (!step_executed) { trajectory.target_pos -= tuning.step_size_coarse; current_mode = MOTOR_MODE_POSITION; step_executed = true; }
         } else { trajectory.target_vel = -tuning.jog_speed_fine; current_mode = MOTOR_MODE_SPEED; }
         break;
-    case 'R': // Now Increments (Moves Right/Positive)
+    case 'R': 
         if (current_mode == MOTOR_MODE_GHOST) {
             buffered_target_pos += resolution_step;
         } else if (jog_mode == JOG_COARSE) {
@@ -327,24 +367,26 @@ void Motor_ProcessCommand(char cmd)
             a_button_is_held = false; returning_home = false;
         }
         if (current_mode == MOTOR_MODE_SPEED) {
-            current_mode = MOTOR_MODE_POSITION; trajectory.target_pos = encoder.current_position_deg;
-            trajectory.current_setpoint_pos = encoder.current_position_deg;
+            if (jog_mode == JOG_FINE) {
+                current_mode = MOTOR_MODE_STOPPED; // Just stop/coast in fine mode
+            } else {
+                current_mode = MOTOR_MODE_POSITION; 
+                trajectory.target_pos = encoder.current_position_deg;
+                trajectory.current_setpoint_pos = encoder.current_position_deg;
+                trajectory.current_setpoint_vel = 0.0f; 
+            }
         }
         break;
-    case 'Y': // Press Y: Execute buffered target if in Ghost Mode
+    case 'Y': 
         if (current_mode == MOTOR_MODE_GHOST) {
             float rel_target = buffered_target_pos - encoder.current_position_deg;
-            printf("START,%.1f\r\n", fabsf(rel_target)); // Tell MATLAB we are starting NOW
+            printf("START,%.1f\r\n", fabsf(rel_target)); 
             
             trajectory.target_pos = buffered_target_pos;
             ghost_buffer_idx = 0; 
             ghost_move_active = true;
             ghost_settle_start_tick = 0;
         }
-        break;
-    case 'M': 
-        if (jog_mode == JOG_COARSE) { jog_mode = JOG_FINE; resolution_step = tuning.step_size_fine; } 
-        else { jog_mode = JOG_COARSE; resolution_step = tuning.step_size_coarse; }
         break;
     case 'J': current_mode = MOTOR_MODE_POSITION; trajectory.target_pos = encoder.current_position_deg; break;
     default: break;
@@ -379,6 +421,20 @@ void TIM6_Control_Loop_ISR(void)
         }
     }
 
+    // Check for B-button long press (1 second) to toggle Control System Mode
+    if (b_button_active && !Emergency_stop) {
+        if (HAL_GetTick() - b_button_hold_tick >= 1000) {
+            if (control_system_mode == CONTROL_MODE_JOYSTICK) {
+                control_system_mode = CONTROL_MODE_BASE_SYSTEM;
+                printf("CONTROL: BASE_SYSTEM\r\n");
+            } else {
+                control_system_mode = CONTROL_MODE_JOYSTICK;
+                printf("CONTROL: JOYSTICK\r\n");
+            }
+            b_button_active = false; // Reset to prevent multiple toggles
+        }
+    }
+
     if (autotune_trigger == ATUNE_POS) { Motor_StartAutotune(); autotune_trigger = ATUNE_IDLE; }
     else if (autotune_trigger == ATUNE_SPEED) { Motor_StartAutotuneSpeed(); autotune_trigger = ATUNE_IDLE; }
     if (a_button_is_held && !returning_home) {
@@ -386,6 +442,18 @@ void TIM6_Control_Loop_ISR(void)
             returning_home = true; trajectory.target_pos = 0.0f; current_mode = MOTOR_MODE_POSITION;
         }
     }
+
+    // Safety Check: If in Joystick mode, ensure joystick is connected
+    if (control_system_mode == CONTROL_MODE_JOYSTICK && !is_joystick_connected) {
+        fault_code |= (1 << 2); // Set Bit 2: Joystick Disconnected
+        if (current_mode != MOTOR_MODE_STOPPED) {
+            current_mode = MOTOR_MODE_STOPPED;
+            PWM_Apply(0.0f);
+        }
+    } else {
+        fault_code &= ~(1 << 2); // Clear Bit 2 if connected
+    }
+
     if (Emergency_stop || current_mode == MOTOR_MODE_STOPPED) { 
         if (ghost_move_active) {
             ghost_move_active = false;
@@ -460,10 +528,12 @@ void TIM6_Control_Loop_ISR(void)
         return;
     }
 
+    float current_applied_pwm = 0.0f;
+
     if (current_mode == MOTOR_MODE_SPEED) {
         float ff = tuning.speed_Kf * trajectory.target_vel;
-        float pwm = PID_Compute(&pid_speed, trajectory.target_vel, encoder.filtered_rpm) + ff; 
-        PWM_Apply(pwm);
+        current_applied_pwm = PID_Compute(&pid_speed, trajectory.target_vel, encoder.filtered_rpm) + ff; 
+        PWM_Apply(current_applied_pwm);
         trajectory.target_pos = encoder.current_position_deg; trajectory.current_setpoint_pos = encoder.current_position_deg;
     } 
     else if (current_mode == MOTOR_MODE_POSITION || current_mode == MOTOR_MODE_GHOST) {
@@ -476,8 +546,8 @@ void TIM6_Control_Loop_ISR(void)
 
         float target_rpm = PID_Compute(&pid_position, trajectory.current_setpoint_pos, encoder.current_position_deg);
         float ff = tuning.speed_Kf * target_rpm;
-        float pwm = PID_Compute(&pid_speed, target_rpm, encoder.filtered_rpm) + ff; 
-        PWM_Apply(pwm);
+        current_applied_pwm = PID_Compute(&pid_speed, target_rpm, encoder.filtered_rpm) + ff; 
+        PWM_Apply(current_applied_pwm);
 
         // Check for arrival in Ghost Mode
         if (ghost_move_active) {
@@ -499,6 +569,67 @@ void TIM6_Control_Loop_ISR(void)
                 ghost_settle_start_tick = 0;
             }
         }
+    }
+
+    // --- STALL & ENCODER FAULT DETECTION ---
+    bool stall_condition = false;
+
+    // 1. Stall Check (High PWM, Low Velocity, Significant Error)
+    if (fabsf(current_applied_pwm) >= STALL_PWM_THRESHOLD && fabsf(encoder.filtered_rpm) < STALL_VELOCITY_THRESHOLD) {
+        if (current_mode == MOTOR_MODE_POSITION || current_mode == MOTOR_MODE_GHOST) {
+            float pos_error = fabsf(trajectory.target_pos - encoder.current_position_deg);
+            if (pos_error > STALL_SETTLING_ERROR_DEG) stall_condition = true;
+        } else if (current_mode == MOTOR_MODE_SPEED) {
+            stall_condition = true;
+        }
+    }
+
+    // 2. Encoder Phase Inversion Check (Wrong Direction)
+    // If PWM is high and motor is moving fast in the OPPOSITE direction
+    if ((current_applied_pwm > ENCODER_FAULT_PWM_THRESHOLD && encoder.filtered_rpm < -ENCODER_INVERSION_RPM_LIMIT) ||
+        (current_applied_pwm < -ENCODER_FAULT_PWM_THRESHOLD && encoder.filtered_rpm > ENCODER_INVERSION_RPM_LIMIT)) {
+        fault_code |= (1 << 1); // Set Bit 1: Encoder Error
+        if (safety_enabled) {
+            Emergency_stop = true;
+            printf("CRITICAL: ENCODER INVERTED / PHASE ERROR\r\n");
+            PWM_Apply(0.0f);
+            return;
+        }
+    }
+
+    // 3. Encoder Signal Loss Check (No pulses at all)
+    // Only check if PWM is substantial and we are actually commanding movement
+    if (fabsf(current_applied_pwm) > ENCODER_FAULT_PWM_THRESHOLD && 
+        fabsf(encoder.filtered_rpm) < STALL_VELOCITY_THRESHOLD &&
+        encoder.absolute_counts == last_absolute_counts) {
+        
+        if (encoder_fault_timer == 0) encoder_fault_timer = HAL_GetTick();
+        else if (HAL_GetTick() - encoder_fault_timer >= 1000) { // Increased to 1s for safety
+            fault_code |= (1 << 1); // Set Bit 1: Encoder Error
+            if (safety_enabled) {
+                Emergency_stop = true;
+                printf("CRITICAL: ENCODER DISCONNECTED / NO SIGNAL\r\n");
+                PWM_Apply(0.0f);
+                return;
+            }
+        }
+    } else {
+        encoder_fault_timer = 0;
+        last_absolute_counts = encoder.absolute_counts;
+    }
+
+    if (stall_condition) {
+        if (stall_timer == 0) stall_timer = HAL_GetTick();
+        else if (HAL_GetTick() - stall_timer >= STALL_TIME_MS) {
+            fault_code |= (1 << 0); // Set Bit 0: Motor Stalled
+            if (safety_enabled) {
+                Emergency_stop = true;
+                printf("CRITICAL: MOTOR STALLED\r\n");
+                PWM_Apply(0.0f);
+            }
+        }
+    } else {
+        stall_timer = 0;
     }
 }
 

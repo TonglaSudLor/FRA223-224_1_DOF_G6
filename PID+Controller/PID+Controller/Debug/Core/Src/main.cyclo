@@ -4,4 +4,4 @@
 ../Core/Src/main.c:212:5:_write	1
 ../Core/Src/main.c:225:6:HAL_TIM_PeriodElapsedCallback	2
 ../Core/Src/main.c:240:6:HAL_UART_RxCpltCallback	10
-../Core/Src/main.c:309:6:Error_Handler	1
+../Core/Src/main.c:310:6:Error_Handler	1

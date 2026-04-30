@@ -284,6 +284,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
         // Update M and Y button status (for 3s hold detection)
         Motor_UpdateModeButton(rx_buffer[0] == 'M');
         Motor_UpdateSelectionButton(rx_buffer[0] == 'Y');
+        Motor_UpdateControlModeButton(rx_buffer[0] == 'B');
 
         // Command (ตัวอักษรที่ 0)
         Motor_ProcessCommand(rx_buffer[0]);
