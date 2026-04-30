@@ -5,6 +5,11 @@ This project implements a high-precision 1-DOF robot control system using an **S
 ## 🚀 Features
 - **Dual-Loop PID Control**: Cascaded speed and position loops for precise tracking.
 - **S-Curve Trajectory**: Smooth acceleration/deceleration to minimize vibration and mechanical stress.
+- **Enhanced Safety Suite**:
+  - **Stall Detection**: Detects physical blocks and cuts power.
+  - **Encoder Monitoring**: Detects signal loss or phase inversion.
+  - **Connection Guard**: Auto-halts if Bluetooth joystick disconnects.
+- **Dual Control Stages**: Toggle between standard Joystick Control and Base System Mode.
 - **Advanced Tuning**:
   - Relay-based Autotune (Position & Speed).
   - Open-loop Feed-Forward (Kf) characterization.
@@ -90,22 +95,35 @@ The system supports high-speed telemetry for tuning and validation. **Note:** En
 | :---: | :---: | :--- |
 | **L / R** | `L` / `R` | Move Positive/Negative (Degrees) |
 | **U / D** | `U` / `D` | Manual Velocity Jog (RPM) |
-| **O (Release)** | `O` | Release movement, hold current position |
-| **X (Emergency)**| `P` | **Emergency Stop** (Cut PWM / Disable PID) |
+| **O (Release)** | `O` | Release movement (Locks pos in Coarse, Coast in Fine) |
+| **X (Emergency)**| `P` | **Emergency Stop / Reset** (Clears Faults) |
 | **A (Home)** | `A` | **Press**: Set Zero. **Hold 3s**: Return to Home. |
 | **M (Mode)** | `M` | **Press**: Fine/Coarse toggle. **Hold 3s**: Start FF Test. |
 | **Y (Select)** | `Y` | **Hold 1s**: Ghost Mode toggle. **Press**: Execute move. |
+| **B (Control)** | `B` | **Hold 1s**: Toggle Joystick / Base System Mode. |
 
 ### 🔍 Live Expression Monitoring
-For real-time debugging in STM32CubeIDE, add these variables to the **Live Expressions** tab (refer to `live-expression_variable.png`):
+For real-time debugging in STM32CubeIDE, add these variables to your **Live Expressions** tab to monitor the system's state:
 
-- `current_mode`: Observe the current state (SPEED, POSITION, GHOST, etc.).
-- `tuning`: View/Modify PID gains (`pos_Kp`, `speed_Kp`, etc.) and limits.
-- `encoder.current_position_deg`: Current robot arm position.
-- `encoder.filtered_rpm`: Current rotational speed.
-- `target_position_deg`: Final target for the S-Curve.
-- `buffered_target_pos`: The "Ghost" target (magenta line in MATLAB).
-- `Emergency_stop`: Check if the system is in safe mode.
+| Expression | Description |
+| :--- | :--- |
+| `encoder.filtered_rpm` | Current rotational speed (Filtered RPM) |
+| `encoder.current_position_deg` | Actual robot arm position (Degrees) |
+| `trajectory.target_pos` | Internal S-Curve setpoint position |
+| `buffered_target_pos` | The "Ghost" target position |
+| `target_position_deg` | Final commanded target position |
+| `jog_mode` | `JOG_COARSE` or `JOG_FINE` status |
+| `tuning` | PID gains and motion limits structure |
+| `rx_buffer` | Raw UART data from ESP32 |
+| `autotune_trigger` | Trigger for Relay Autotuning |
+| `tuning_progress` | Progress of the active autotune cycle |
+| `autotune_status` | Status of autotuning (Idle, Running, Success) |
+| `current_mode` | Operational state (SPEED, POSITION, GHOST, etc.) |
+| `Emergency_stop` | Global safety lock status |
+| `is_joystick_connected` | Bluetooth connection status |
+| `fault_code` | Diagnostic status (Stall, Encoder, Connection) |
+| `control_system_mode` | `CONTROL_MODE_JOYSTICK` or `CONTROL_MODE_BASE_SYSTEM` |
+| `safety_enabled` | Toggle (1/0) to enable/disable auto-emergency |
 
 ---
 
