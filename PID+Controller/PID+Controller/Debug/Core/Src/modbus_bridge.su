@@ -1,0 +1,10 @@
+../Core/Src/modbus_bridge.c:21:17:Modbus_CRC16	24	static
+../Core/Src/modbus_bridge.c:39:13:Handle_OperatingMode	16	static
+../Core/Src/modbus_bridge.c:44:13:Handle_JogCommand	16	static
+../Core/Src/modbus_bridge.c:49:13:Handle_TestConfig	16	static
+../Core/Src/modbus_bridge.c:54:13:Handle_PrecisionTest	16	static
+../Core/Src/modbus_bridge.c:59:13:Handle_PickPlacePlan	48	static
+../Core/Src/modbus_bridge.c:77:6:Modbus_Init	8	static
+../Core/Src/modbus_bridge.c:86:13:Modbus_HandleWrite	16	static
+../Core/Src/modbus_bridge.c:152:6:Modbus_ProcessByte	104	static
+../Core/Src/modbus_bridge.c:198:6:Modbus_UpdateRegisters	16	static

@@ -323,6 +323,11 @@ void Motor_ProcessCommand(char cmd)
 
     switch (cmd)
     {
+    case 'U': Gripper_Up(); break;
+    case 'D': Gripper_Down(); break;
+    case 'F': Gripper_Toggle(); break;
+    case 'S': Gripper_Sequence_Pick(); break;  // 'S' for Sequence Pick
+    case 'G': Gripper_Sequence_Place(); break; // 'G' for Sequence Place (changed from 'A' to avoid conflict)
     case 'L': 
         if (current_mode == MOTOR_MODE_GHOST) {
             buffered_target_pos -= resolution_step;
@@ -646,3 +651,74 @@ void TIM6_Control_Loop_ISR(void)
 
 float Motor_GetPosition(void) { return encoder.current_position_deg; }
 float Motor_GetSpeed(void) { return encoder.filtered_rpm; }
+
+/* ============================================================================
+ * Gripper & Sequence Functions (Placeholders for Base System)
+ * ============================================================================ */
+
+void Gripper_Up(void)
+{
+    // TODO: Implement Hardware GPIO/PWM for Gripper UP
+    printf("Gripper: UP\r\n");
+}
+
+void Gripper_Down(void)
+{
+    // TODO: Implement Hardware GPIO/PWM for Gripper DOWN
+    printf("Gripper: DOWN\r\n");
+}
+
+void Gripper_Open(void)
+{
+    // TODO: Implement Hardware GPIO/PWM for Gripper OPEN
+    printf("Gripper: OPEN\r\n");
+}
+
+void Gripper_Close(void)
+{
+    // TODO: Implement Hardware GPIO/PWM for Gripper CLOSE
+    printf("Gripper: CLOSE\r\n");
+}
+
+void Gripper_Toggle(void)
+{
+    static bool is_open = true;
+    if (is_open) {
+        Gripper_Close();
+    } else {
+        Gripper_Open();
+    }
+    is_open = !is_open;
+}
+
+/**
+ * @brief Pick Sequence: OPEN -> DOWN -> CLOSE -> UP
+ */
+void Gripper_Sequence_Pick(void)
+{
+    printf("Starting Sequence: PICK\r\n");
+    Gripper_Open();
+    HAL_Delay(500); // Wait for action
+    Gripper_Down();
+    HAL_Delay(1000);
+    Gripper_Close();
+    HAL_Delay(500);
+    Gripper_Up();
+    printf("Sequence PICK: Done\r\n");
+}
+
+/**
+ * @brief Place Sequence: DOWN -> OPEN -> UP -> CLOSE
+ */
+void Gripper_Sequence_Place(void)
+{
+    printf("Starting Sequence: PLACE\r\n");
+    Gripper_Down();
+    HAL_Delay(1000);
+    Gripper_Open();
+    HAL_Delay(500);
+    Gripper_Up();
+    HAL_Delay(1000);
+    Gripper_Close();
+    printf("Sequence PLACE: Done\r\n");
+}

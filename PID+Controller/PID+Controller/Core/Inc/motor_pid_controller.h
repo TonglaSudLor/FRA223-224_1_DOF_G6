@@ -149,6 +149,21 @@ void Motor_Init(void);
 void Motor_MoveToPosition(float target_degrees);
 
 /**
+ * @brief Gripper control functions
+ */
+void Gripper_Up(void);
+void Gripper_Down(void);
+void Gripper_Open(void);
+void Gripper_Close(void);
+void Gripper_Toggle(void);
+
+/**
+ * @brief Automated gripper sequences
+ */
+void Gripper_Sequence_Pick(void);
+void Gripper_Sequence_Place(void);
+
+/**
  * @brief ตั้งค่าขีดจำกัดแรงดันไฟฟ้า (PWM Limit)
  * @param max_voltage แรงดันสูงสุดที่อนุญาต (V)
  * @param supply_voltage แรงดันจากแหล่งจ่าย (V)

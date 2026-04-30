@@ -255,3 +255,18 @@ java.lang.Exception: Could not delete metadata for '/PID'.
 
 !ENTRY org.eclipse.cdt.core 1 0 2026-04-29 03:20:53.796
 !MESSAGE Indexed 'SPI' (23 sources, 115 headers) in 2.34 sec: 10,724 declarations; 43,948 references; 7 unresolved inclusions; 1,115 syntax errors; 1,455 unresolved names (2.6%)
+!SESSION 2026-04-30 22:00:42.261 -----------------------------------------------
+eclipse.buildId=Version 1.19.0
+java.version=21.0.3
+java.vendor=Eclipse Adoptium
+BootLoader constants: OS=win32, ARCH=x86_64, WS=win32, NL=en_US
+Command-line arguments:  -os win32 -ws win32 -arch x86_64
+
+!ENTRY com.st.stm32cube.ide.mcu.informationcenter 4 4 2026-04-30 22:00:49.866
+!MESSAGE CubeMX plugin appears to be active, Log4j initialization might be too late.
+
+!ENTRY com.st.stm32cube.ide.mcu.informationcenter 1 1 2026-04-30 22:00:49.870
+!MESSAGE Log4j2 initialized with config file E:\college\.[studio]\.[Second_Year]\sem2\FRA223-224_1_DOF_G6\.metadata\.log4j2.xml
+
+!ENTRY com.st.stm32cube.ide.mcu.ide 1 1 2026-04-30 22:00:56.227
+!MESSAGE Started RMI Server, listening on port 41337
