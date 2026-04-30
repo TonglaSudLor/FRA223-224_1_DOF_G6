@@ -8,6 +8,7 @@ This project implements a high-precision 1-DOF robot control system using an **S
 - **Enhanced Safety Suite**:
   - **Stall Detection**: Detects physical blocks and cuts power.
   - **Encoder Monitoring**: Detects signal loss or phase inversion.
+  - **Over-Rotation Protect**: Software limit (±720°) to prevent wire snap.
   - **Connection Guard**: Auto-halts if Bluetooth joystick disconnects.
 - **Dual Control Stages**: Toggle between standard Joystick Control and Base System Mode.
 - **Advanced Tuning**:

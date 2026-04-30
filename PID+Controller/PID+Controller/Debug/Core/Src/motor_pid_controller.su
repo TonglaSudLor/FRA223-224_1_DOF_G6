@@ -16,5 +16,5 @@
 ../Core/Src/motor_pid_controller.c:272:6:Motor_StartAutotuneSpeed	8	static
 ../Core/Src/motor_pid_controller.c:283:6:Motor_ProcessCommand	24	static
 ../Core/Src/motor_pid_controller.c:396:6:TIM6_Control_Loop_ISR	64	static
-../Core/Src/motor_pid_controller.c:636:7:Motor_GetPosition	4	static
-../Core/Src/motor_pid_controller.c:637:7:Motor_GetSpeed	4	static
+../Core/Src/motor_pid_controller.c:647:7:Motor_GetPosition	4	static
+../Core/Src/motor_pid_controller.c:648:7:Motor_GetSpeed	4	static

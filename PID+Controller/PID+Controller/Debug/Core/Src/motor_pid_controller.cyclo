@@ -15,6 +15,6 @@
 ../Core/Src/motor_pid_controller.c:261:6:Motor_StartAutotune	2
 ../Core/Src/motor_pid_controller.c:272:6:Motor_StartAutotuneSpeed	2
 ../Core/Src/motor_pid_controller.c:283:6:Motor_ProcessCommand	27
-../Core/Src/motor_pid_controller.c:396:6:TIM6_Control_Loop_ISR	90
-../Core/Src/motor_pid_controller.c:636:7:Motor_GetPosition	1
-../Core/Src/motor_pid_controller.c:637:7:Motor_GetSpeed	1
+../Core/Src/motor_pid_controller.c:396:6:TIM6_Control_Loop_ISR	92
+../Core/Src/motor_pid_controller.c:647:7:Motor_GetPosition	1
+../Core/Src/motor_pid_controller.c:648:7:Motor_GetSpeed	1

@@ -30,7 +30,8 @@ typedef enum {
     FAULT_NONE = 0x00,
     FAULT_MOTOR_STALLED = 0x01,
     FAULT_ENCODER_ERROR = 0x02,
-    FAULT_JOYSTICK_LOST = 0x04
+    FAULT_JOYSTICK_LOST = 0x04,
+    FAULT_OVER_ROTATION = 0x08     /**< Bit 3: Motor exceeded 2 rounds */
 } Fault_Code_t;
 
 typedef enum {

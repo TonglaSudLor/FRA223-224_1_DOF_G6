@@ -56,6 +56,8 @@
 #define ENCODER_FAULT_PWM_THRESHOLD 25.0f   /**< PWM threshold for hardware check */
 #define ENCODER_INVERSION_RPM_LIMIT 5.0f    /**< RPM threshold for inversion check */
 
+#define SOFT_LIMIT_DEG           720.0f  /**< 2 full rounds limit from home */
+
 /* ============================================================================
  * SYSTEM TIMING
  * ============================================================================ */

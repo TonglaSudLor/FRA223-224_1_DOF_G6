@@ -53,6 +53,7 @@ If the system enters **Emergency Stop**, check this variable in Live Expressions
 *   **`FAULT_MOTOR_STALLED`**: Physical obstruction detected (High PWM, No Motion).
 *   **`FAULT_ENCODER_ERROR`**: Encoder disconnected, signal loss, or phase inversion (A/B swapped).
 *   **`FAULT_JOYSTICK_LOST`**: Bluetooth connection to ESP32 was interrupted.
+*   **`FAULT_OVER_ROTATION`**: Soft-limit exceeded (±720° from home). Prevents wire snapping.
 
 ### 5.2 Safety Override (`safety_enabled`)
 For troubleshooting, you can disable automatic shutdowns:

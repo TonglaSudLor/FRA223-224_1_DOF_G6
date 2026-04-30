@@ -631,6 +631,17 @@ void TIM6_Control_Loop_ISR(void)
     } else {
         stall_timer = 0;
     }
+
+    // 4. Over-Rotation Check (Wire Snap Protection)
+    // If motor rotates > 2 rounds (720 deg) from home, lock it down
+    if (fabsf(encoder.current_position_deg) > SOFT_LIMIT_DEG) {
+        fault_code |= (1 << 3); // Set Bit 3: Over-Rotation
+        if (safety_enabled) {
+            Emergency_stop = true;
+            printf("CRITICAL: SOFT LIMIT EXCEEDED (WIRE SNAP PROTECT)\r\n");
+            PWM_Apply(0.0f);
+        }
+    }
 }
 
 float Motor_GetPosition(void) { return encoder.current_position_deg; }
