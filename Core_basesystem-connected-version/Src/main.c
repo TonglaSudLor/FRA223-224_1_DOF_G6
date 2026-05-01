@@ -1,0 +1,366 @@
+/* USER CODE BEGIN Header */
+/**
+  ******************************************************************************
+  * @file           : main.c
+  * @brief          : Main program body
+  ******************************************************************************
+  */
+/* USER CODE END Header */
+/* Includes ------------------------------------------------------------------*/
+#include "main.h"
+#include "usart.h"
+#include "tim.h"
+#include "gpio.h"
+
+/* Private includes ----------------------------------------------------------*/
+/* USER CODE BEGIN Includes */
+#include "motor_pid_controller.h"
+#include "ModBusRTU.h"
+#include <string.h>
+#include <stdio.h>
+/* USER CODE END Includes */
+
+/* Private typedef -----------------------------------------------------------*/
+/* USER CODE BEGIN PTD */
+/* USER CODE END PTD */
+
+/* Private define ------------------------------------------------------------*/
+/* USER CODE BEGIN PD */
+/* USER CODE END PD */
+
+/* Private macro -------------------------------------------------------------*/
+/* USER CODE BEGIN PM */
+/* USER CODE END PM */
+
+/* Private variables ---------------------------------------------------------*/
+
+/* USER CODE BEGIN PV */
+/* Motor control variables */
+volatile uint32_t loop_counter = 0;
+volatile float target_speed_rpm = 10.0f;
+
+/* UART reception variables */
+uint8_t rx_byte;              
+char rx_buffer[4];            
+uint8_t rx_index = 0;
+char controlState[4] = "O-N";
+
+/* Modbus variables */
+ModbusHandleTypedef hmodbus;
+u16u8_t registerFrame[128];
+uint8_t modbus_rx_byte;
+/* USER CODE END PV */
+
+/* Private function prototypes -----------------------------------------------*/
+void SystemClock_Config(void);
+/* USER CODE BEGIN PFP */
+void Modbus_RxCallback(UART_HandleTypeDef *huart);
+void Modbus_TimerCallback(TIM_HandleTypeDef *htim);
+void Joystick_RxCallback(UART_HandleTypeDef *huart);
+/* USER CODE END PFP */
+
+/* Private user code ---------------------------------------------------------*/
+/* USER CODE BEGIN 0 */
+void Modbus_RxCallback(UART_HandleTypeDef *huart)
+{
+    if (hmodbus.UartStructure.RxTail < MODBUS_MESSAGEBUFFER_SIZE)
+    {
+        hmodbus.UartStructure.RxBuffer[hmodbus.UartStructure.RxTail++] = modbus_rx_byte;
+    }
+    hmodbus.Mstatus = Modbus_state_Reception;
+    __HAL_TIM_SET_COUNTER(hmodbus.htim, 0);
+    HAL_TIM_Base_Start_IT(hmodbus.htim);
+    HAL_UART_Receive_IT(hmodbus.huart, &modbus_rx_byte, 1);
+}
+
+void Modbus_TimerCallback(TIM_HandleTypeDef *htim)
+{
+    if (htim->Instance == TIM16)
+    {
+        hmodbus.Flag_T35TimeOut = 1;
+        HAL_TIM_Base_Stop_IT(htim);
+    }
+}
+
+void Joystick_RxCallback(UART_HandleTypeDef *huart)
+{
+    if (rx_byte == 'P') Motor_ProcessCommand('P');
+
+    if (rx_byte == '\n' || rx_byte == '\r')
+    {
+      if (rx_index > 0)
+      {
+        rx_buffer[rx_index] = '\0';
+        if (rx_buffer[0] != 'P') Motor_ProcessCommand(rx_buffer[0]);
+        if (rx_index >= 3) Motor_SetConnectionStatus(rx_buffer[2] == 'C');
+        rx_index = 0;
+        HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
+      }
+    }
+    else
+    {
+      if (rx_index < (sizeof(rx_buffer) - 1)) rx_buffer[rx_index++] = rx_byte;
+      if (rx_index >= 3)
+      {
+        rx_buffer[rx_index] = '\0';
+        Motor_UpdateModeButton(rx_buffer[0] == 'M');
+        Motor_UpdateSelectionButton(rx_buffer[0] == 'Y');
+        Motor_UpdateControlModeButton(rx_buffer[0] == 'B');
+        Motor_ProcessCommand(rx_buffer[0]);
+        Motor_SetConnectionStatus(rx_buffer[2] == 'C');
+        rx_index = 0;
+      }
+    }
+    HAL_UART_Receive_IT(&huart3, &rx_byte, 1);
+}
+/* USER CODE END 0 */
+
+/**
+  * @brief  The application entry point.
+  * @retval int
+  */
+int main(void)
+{
+
+  /* USER CODE BEGIN 1 */
+  /* USER CODE END 1 */
+
+  /* MCU Configuration--------------------------------------------------------*/
+
+  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+  HAL_Init();
+
+  /* USER CODE BEGIN Init */
+
+  /* USER CODE END Init */
+
+  /* Configure the system clock */
+  SystemClock_Config();
+
+  /* USER CODE BEGIN SysInit */
+
+  /* USER CODE END SysInit */
+
+  /* Initialize all configured peripherals */
+  MX_GPIO_Init();
+  MX_TIM8_Init();
+  MX_TIM6_Init();
+  MX_TIM3_Init();
+  MX_USART3_UART_Init();
+  MX_LPUART1_UART_Init();
+  MX_TIM16_Init();
+  /* USER CODE BEGIN 2 */
+  // 1. Motor Initialization
+  Motor_Init();
+  Motor_SetVoltageLimit(12.0f, 12.0f);
+  Motor_SetMotionProfile(2000.0f, 1000.0f, 0.8f);
+
+  // 2. Modbus Initialization
+  memset(registerFrame, 0, sizeof(registerFrame));
+  registerFrame[0].U16 = 22881; // "YA"
+  
+  hmodbus.huart = &hlpuart1;
+  hmodbus.htim = &htim16;
+  hmodbus.slaveAddress = 21;
+  hmodbus.RegisterSize = 128;
+  Modbus_init(&hmodbus, registerFrame);
+  
+  // Register Callbacks
+  HAL_UART_RegisterCallback(&hlpuart1, HAL_UART_RX_COMPLETE_CB_ID, Modbus_RxCallback);
+  HAL_UART_RegisterCallback(&huart3, HAL_UART_RX_COMPLETE_CB_ID, Joystick_RxCallback);
+  HAL_TIM_RegisterCallback(&htim16, HAL_TIM_PERIOD_ELAPSED_CB_ID, Modbus_TimerCallback);
+  
+  // Start reception
+  HAL_UART_Receive_IT(&hlpuart1, &modbus_rx_byte, 1);
+  HAL_UART_Receive_IT(&huart3, &rx_byte, 1);
+  
+  registerFrame[0].U16 = 22881; // "YA"
+  /* USER CODE END 2 */
+
+  /* Infinite loop */
+  /* USER CODE BEGIN WHILE */
+  uint32_t last_matlab_tick = 0;
+  while (1)
+  {
+    /* USER CODE END WHILE */
+
+    /* USER CODE BEGIN 3 */
+    uint32_t now = HAL_GetTick();
+    
+    // Stream data to MATLAB every 20ms (50Hz)
+    if (now - last_matlab_tick >= 20)
+    {
+      Motor_SendDataToMatlab();
+      last_matlab_tick = now;
+    }
+    
+    // Modbus Data Sync
+    registerFrame[0x28].U16 = (int16_t)(Motor_GetPosition() * 10.0f);
+    registerFrame[0x29].U16 = (int16_t)(Motor_GetSpeed() * 10.0f);
+    registerFrame[0x31].U16 = Emergency_stop ? 1 : 0;
+    
+    // Handle Modbus Writes (Commands from PC)
+    if (registerFrame[0x01].U16 & 0x01) { // Home
+        Motor_MoveToPosition(0.0f);
+        registerFrame[0x01].U16 &= ~0x01;
+    }
+    if (registerFrame[0x01].U16 & 0x08) { // Set Home
+        __HAL_TIM_SET_COUNTER(&htim3, 0);
+        encoder.absolute_counts = 0;
+        encoder.current_position_deg = 0.0f;
+        trajectory.target_pos = 0.0f;
+        trajectory.current_setpoint_pos = 0.0f;
+        registerFrame[0x01].U16 &= ~0x08;
+    }
+    if (registerFrame[0x24].U16 != 0) { // P2P
+        Motor_MoveToPosition((float)((int16_t)registerFrame[0x24].U16));
+        registerFrame[0x24].U16 = 0;
+    }
+
+    // Process Modbus
+    Modbus_Protocol_Worker(&hmodbus);
+  }
+  /* USER CODE END 3 */
+}
+
+/**
+  * @brief System Clock Configuration
+  * @retval None
+  */
+void SystemClock_Config(void)
+{
+  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+
+  /** Configure the main internal regulator output voltage
+  */
+  HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1_BOOST);
+
+  /** Initializes the RCC Oscillators according to the specified parameters
+  * in the RCC_OscInitTypeDef structure.
+  */
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
+  RCC_OscInitStruct.PLL.PLLM = RCC_PLLM_DIV4;
+  RCC_OscInitStruct.PLL.PLLN = 85;
+  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
+  RCC_OscInitStruct.PLL.PLLQ = RCC_PLLQ_DIV2;
+  RCC_OscInitStruct.PLL.PLLR = RCC_PLLR_DIV2;
+  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Initializes the CPU, AHB and APB buses clocks
+  */
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
+                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
+
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_4) != HAL_OK)
+  {
+    Error_Handler();
+  }
+}
+
+/* USER CODE BEGIN 4 */
+
+/**
+  * @brief  Redirect printf to huart3 (Joystick Port) to avoid HAL conflict
+  */
+int _write(int file, char *ptr, int len)
+{
+  for (int i = 0; i < len; i++)
+  {
+    while (!(huart3.Instance->ISR & UART_FLAG_TXE));
+    huart3.Instance->TDR = ptr[i];
+  }
+  return len;
+}
+
+/**
+  * @brief  Callback function called by TIM6 interrupt handler
+  */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+  if (htim->Instance == TIM6)
+  {
+    TIM6_Control_Loop_ISR();
+  }
+}
+
+/**
+  * @brief  UART reception completion callback (for huart3)
+  */
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+  if (huart->Instance == USART3)
+  {
+    if (rx_byte == 'P') Motor_ProcessCommand('P');
+
+    if (rx_byte == '\n' || rx_byte == '\r')
+    {
+      if (rx_index > 0)
+      {
+        rx_buffer[rx_index] = '\0';
+        if (rx_buffer[0] != 'P') Motor_ProcessCommand(rx_buffer[0]);
+        if (rx_index >= 3) Motor_SetConnectionStatus(rx_buffer[2] == 'C');
+        rx_index = 0;
+        HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
+      }
+    }
+    else
+    {
+      if (rx_index < (sizeof(rx_buffer) - 1)) rx_buffer[rx_index++] = rx_byte;
+      if (rx_index >= 3)
+      {
+        rx_buffer[rx_index] = '\0';
+        Motor_UpdateModeButton(rx_buffer[0] == 'M');
+        Motor_UpdateSelectionButton(rx_buffer[0] == 'Y');
+        Motor_UpdateControlModeButton(rx_buffer[0] == 'B');
+        Motor_ProcessCommand(rx_buffer[0]);
+        Motor_SetConnectionStatus(rx_buffer[2] == 'C');
+        rx_index = 0;
+      }
+    }
+    HAL_UART_Receive_IT(&huart3, &rx_byte, 1);
+  }
+}
+
+/* USER CODE END 4 */
+
+/**
+  * @brief  This function is executed in case of error occurrence.
+  * @retval None
+  */
+void Error_Handler(void)
+{
+  /* USER CODE BEGIN Error_Handler_Debug */
+  __disable_irq();
+  while (1)
+  {
+  }
+  /* USER CODE END Error_Handler_Debug */
+}
+#ifdef USE_FULL_ASSERT
+/**
+  * @brief  Reports the name of the source file and the source line number
+  *         where the assert_param error has occurred.
+  * @param  file: pointer to the source file name
+  * @param  line: assert_param error line source number
+  * @retval None
+  */
+void assert_failed(uint8_t *file, uint32_t line)
+{
+  /* USER CODE BEGIN 6 */
+  /* User can add his own implementation to report the file name and line number,
+     ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
+  /* USER CODE END 6 */
+}
+#endif /* USE_FULL_ASSERT */

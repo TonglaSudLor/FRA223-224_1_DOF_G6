@@ -291,3 +291,23 @@ Command-line arguments:  -os win32 -ws win32 -arch x86_64
 
 !ENTRY com.st.stm32cube.common.projectcreation 4 0 2026-05-02 00:09:49.645
 !MESSAGE Project is null
+
+!ENTRY org.eclipse.core.resources 4 77 2026-05-02 01:03:29.202
+!MESSAGE Invalid project description.
+!SUBENTRY 1 unknown 0 0 2026-05-02 01:03:29.202
+!MESSAGE OK
+!SUBENTRY 1 org.eclipse.core.resources 4 77 2026-05-02 01:03:29.202
+!MESSAGE E:\college\.[studio]\.[Second_Year]\sem2\FRA223-224_1_DOF_G6\PID+Controller overlaps the location of another project: 'PID+Controller'
+
+!ENTRY com.st.stm32cube.common.projectcreation 4 0 2026-05-02 01:03:29.203
+!MESSAGE Project is null
+
+!ENTRY org.eclipse.core.resources 4 77 2026-05-02 01:03:29.345
+!MESSAGE Invalid project description.
+!SUBENTRY 1 unknown 0 0 2026-05-02 01:03:29.345
+!MESSAGE OK
+!SUBENTRY 1 org.eclipse.core.resources 4 77 2026-05-02 01:03:29.345
+!MESSAGE E:\college\.[studio]\.[Second_Year]\sem2\FRA223-224_1_DOF_G6\PID+Controller overlaps the location of another project: 'PID+Controller'
+
+!ENTRY com.st.stm32cube.common.projectcreation 4 0 2026-05-02 01:03:29.345
+!MESSAGE Project is null

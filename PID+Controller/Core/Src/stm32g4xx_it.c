@@ -56,8 +56,10 @@
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
+extern UART_HandleTypeDef hlpuart1;
 extern UART_HandleTypeDef huart3;
 extern TIM_HandleTypeDef htim6;
+extern TIM_HandleTypeDef htim16;
 /* USER CODE BEGIN EV */
 
 /* USER CODE END EV */
@@ -243,5 +245,19 @@ void TIM6_DAC_IRQHandler(void)
 }
 
 /* USER CODE BEGIN 1 */
+/**
+  * @brief This function handles LPUART1 global interrupt / LPUART1 wake-up interrupt through EXTI line 31.
+  */
+void LPUART1_IRQHandler(void)
+{
+  HAL_UART_IRQHandler(&hlpuart1);
+}
 
+/**
+  * @brief This function handles TIM1 update interrupt and TIM16 global interrupt.
+  */
+void TIM1_UP_TIM16_IRQHandler(void)
+{
+  HAL_TIM_IRQHandler(&htim16);
+}
 /* USER CODE END 1 */
