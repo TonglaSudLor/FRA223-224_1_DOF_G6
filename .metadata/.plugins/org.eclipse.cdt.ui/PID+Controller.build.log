@@ -1,0 +1,10 @@
+00:09:49 **** Incremental Build of configuration Debug for project PID+Controller ****
+make -j12 all 
+arm-none-eabi-size  PID+Controller.elf 
+   text	   data	    bss	    dec	    hex	filename
+  45308	    120	  16920	  62348	   f38c	PID+Controller.elf
+Finished building: default.size.stdout
+ 
+
+00:09:49 Build Finished. 0 errors, 0 warnings. (took 333ms)
+
