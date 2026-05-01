@@ -1,0 +1,8 @@
+../Core/Src/ModBusRTU.c:46:17:CRC16	24	static
+../Core/Src/ModBusRTU.c:60:6:Modbus_init	16	static
+../Core/Src/ModBusRTU.c:69:13:Modbus_ErrorReply	16	static
+../Core/Src/ModBusRTU.c:76:13:modbusWrite1Register	24	static
+../Core/Src/ModBusRTU.c:92:13:modbusRead1Register	24	static
+../Core/Src/ModBusRTU.c:119:13:Modbus_frame_response	16	static
+../Core/Src/ModBusRTU.c:135:13:Modbus_Emission	24	static
+../Core/Src/ModBusRTU.c:151:6:Modbus_Protocol_Worker	24	static

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<section name="Workbench">
+	<item key="hasShownOverlayPopupBefore" value="true"/>
+	<item key="replaceBarOpen" value="false"/>
+	<list key="searchhistory">
+		<item value="HAL_UART_RegisterCallback(&amp;hlpuart1, HAL_UART_RX_COMPLETE_CB_ID,"/>
+		<item value="HAL_TIM_PeriodElapsedCallback"/>
+		<item value="HAL_UART"/>
+		<item value="hmodbus.slaveAddress"/>
+		<item value="slave"/>
+	</list>
+</section>

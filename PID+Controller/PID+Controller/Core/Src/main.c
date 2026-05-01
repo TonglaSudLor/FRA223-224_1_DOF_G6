@@ -4,16 +4,6 @@
   * @file           : main.c
   * @brief          : Main program body
   ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2026 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
   */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
@@ -25,23 +15,21 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "motor_pid_controller.h"
-#include "usart.h"
+#include "ModBusRTU.h"
 #include <string.h>
+#include <stdio.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
-
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
@@ -52,39 +40,78 @@ volatile uint32_t loop_counter = 0;
 volatile float target_speed_rpm = 10.0f;
 
 /* UART reception variables */
-uint8_t rx_byte;              // ตัวแปรพักข้อมูลที่รับเข้าทีละ byte
-char rx_buffer[4];            // Buffer ชั่วคราว (ขนาด 3 + null)
+uint8_t rx_byte;              
+char rx_buffer[4];            
 uint8_t rx_index = 0;
 char controlState[4] = "O-N";
+
+/* Modbus variables */
+ModbusHandleTypedef hmodbus;
+u16u8_t registerFrame[128];
+uint8_t modbus_rx_byte;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
-static void Motor_Control_Demo(void);
+void Modbus_RxCallback(UART_HandleTypeDef *huart);
+void Modbus_TimerCallback(TIM_HandleTypeDef *htim);
+void Joystick_RxCallback(UART_HandleTypeDef *huart);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
-/**
-  * @brief  Motor control demonstration function
-  * @note   This example shows how to use the motor PID controller
-  * @retval None
-  */
-
-static void Motor_Control_Demo(void)
+void Modbus_RxCallback(UART_HandleTypeDef *huart)
 {
-  /* ตัวอย่าง: ส่งค่าเพื่อดูใน Live Expressions หรือ UART */
-  if ((loop_counter % 10) == 0)
-  {
-    /* printf("Pos: %.2f deg | Speed: %.2f RPM\r\n",
-           Motor_GetPosition(),
-           Motor_GetSpeed());
-    */
-  }
+    if (hmodbus.UartStructure.RxTail < MODBUS_MESSAGEBUFFER_SIZE)
+    {
+        hmodbus.UartStructure.RxBuffer[hmodbus.UartStructure.RxTail++] = modbus_rx_byte;
+    }
+    hmodbus.Mstatus = Modbus_state_Reception;
+    __HAL_TIM_SET_COUNTER(hmodbus.htim, 0);
+    HAL_TIM_Base_Start_IT(hmodbus.htim);
+    HAL_UART_Receive_IT(hmodbus.huart, &modbus_rx_byte, 1);
+}
 
-  loop_counter++;
+void Modbus_TimerCallback(TIM_HandleTypeDef *htim)
+{
+    if (htim->Instance == TIM16)
+    {
+        hmodbus.Flag_T35TimeOut = 1;
+        HAL_TIM_Base_Stop_IT(htim);
+    }
+}
+
+void Joystick_RxCallback(UART_HandleTypeDef *huart)
+{
+    if (rx_byte == 'P') Motor_ProcessCommand('P');
+
+    if (rx_byte == '\n' || rx_byte == '\r')
+    {
+      if (rx_index > 0)
+      {
+        rx_buffer[rx_index] = '\0';
+        if (rx_buffer[0] != 'P') Motor_ProcessCommand(rx_buffer[0]);
+        if (rx_index >= 3) Motor_SetConnectionStatus(rx_buffer[2] == 'C');
+        rx_index = 0;
+        HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
+      }
+    }
+    else
+    {
+      if (rx_index < (sizeof(rx_buffer) - 1)) rx_buffer[rx_index++] = rx_byte;
+      if (rx_index >= 3)
+      {
+        rx_buffer[rx_index] = '\0';
+        Motor_UpdateModeButton(rx_buffer[0] == 'M');
+        Motor_UpdateSelectionButton(rx_buffer[0] == 'Y');
+        Motor_UpdateControlModeButton(rx_buffer[0] == 'B');
+        Motor_ProcessCommand(rx_buffer[0]);
+        Motor_SetConnectionStatus(rx_buffer[2] == 'C');
+        rx_index = 0;
+      }
+    }
+    HAL_UART_Receive_IT(&huart3, &rx_byte, 1);
 }
 /* USER CODE END 0 */
 
@@ -96,7 +123,6 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -122,20 +148,33 @@ int main(void)
   MX_TIM3_Init();
   MX_USART3_UART_Init();
   MX_LPUART1_UART_Init();
+  MX_TIM16_Init();
   /* USER CODE BEGIN 2 */
-
-  
-  // 1. เริ่มต้นระบบ (เปิด Timer, PWM, PID)
+  // 1. Motor Initialization
   Motor_Init();
   Motor_SetVoltageLimit(12.0f, 12.0f);
-
-  // 2. ตั้งค่าโปรไฟล์ S-Curve
-  // (ความเร็วสูงสุด 2000 RPM, ความเร่ง 1000 RPM/s, ความสมูท 0.8)
   Motor_SetMotionProfile(2000.0f, 1000.0f, 0.8f);
 
-  // 3. เริ่มต้นรับข้อมูลผ่าน Interrupt ทีละ 1 byte
+  // 2. Modbus Initialization
+  memset(registerFrame, 0, sizeof(registerFrame));
+  registerFrame[0].U16 = 22881; // "YA"
+  
+  hmodbus.huart = &hlpuart1;
+  hmodbus.htim = &htim16;
+  hmodbus.slaveAddress = 21;
+  hmodbus.RegisterSize = 128;
+  Modbus_init(&hmodbus, registerFrame);
+  
+  // Register Callbacks
+  HAL_UART_RegisterCallback(&hlpuart1, HAL_UART_RX_COMPLETE_CB_ID, Modbus_RxCallback);
+  HAL_UART_RegisterCallback(&huart3, HAL_UART_RX_COMPLETE_CB_ID, Joystick_RxCallback);
+  HAL_TIM_RegisterCallback(&htim16, HAL_TIM_PERIOD_ELAPSED_CB_ID, Modbus_TimerCallback);
+  
+  // Start reception
+  HAL_UART_Receive_IT(&hlpuart1, &modbus_rx_byte, 1);
   HAL_UART_Receive_IT(&huart3, &rx_byte, 1);
   
+  registerFrame[0].U16 = 22881; // "YA"
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -146,14 +185,40 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+    uint32_t now = HAL_GetTick();
+    
     // Stream data to MATLAB every 20ms (50Hz)
-    if (HAL_GetTick() - last_matlab_tick >= 20)
+    if (now - last_matlab_tick >= 20)
     {
       Motor_SendDataToMatlab();
-      last_matlab_tick = HAL_GetTick();
+      last_matlab_tick = now;
     }
     
-    HAL_Delay(1);
+    // Modbus Data Sync
+    registerFrame[0x28].U16 = (int16_t)(Motor_GetPosition() * 10.0f);
+    registerFrame[0x29].U16 = (int16_t)(Motor_GetSpeed() * 10.0f);
+    registerFrame[0x31].U16 = Emergency_stop ? 1 : 0;
+    
+    // Handle Modbus Writes (Commands from PC)
+    if (registerFrame[0x01].U16 & 0x01) { // Home
+        Motor_MoveToPosition(0.0f);
+        registerFrame[0x01].U16 &= ~0x01;
+    }
+    if (registerFrame[0x01].U16 & 0x08) { // Set Home
+        __HAL_TIM_SET_COUNTER(&htim3, 0);
+        encoder.absolute_counts = 0;
+        encoder.current_position_deg = 0.0f;
+        trajectory.target_pos = 0.0f;
+        trajectory.current_setpoint_pos = 0.0f;
+        registerFrame[0x01].U16 &= ~0x08;
+    }
+    if (registerFrame[0x24].U16 != 0) { // P2P
+        Motor_MoveToPosition((float)((int16_t)registerFrame[0x24].U16));
+        registerFrame[0x24].U16 = 0;
+    }
+
+    // Process Modbus
+    Modbus_Protocol_Worker(&hmodbus);
   }
   /* USER CODE END 3 */
 }
@@ -207,96 +272,63 @@ void SystemClock_Config(void)
 /* USER CODE BEGIN 4 */
 
 /**
-  * @brief  Redirect printf to LPUART1 (connected to PC/USB COM Port)
+  * @brief  Redirect printf to huart3 (Joystick Port) to avoid HAL conflict
   */
 int _write(int file, char *ptr, int len)
 {
-  extern UART_HandleTypeDef hlpuart1;
-  HAL_UART_Transmit(&hlpuart1, (uint8_t*)ptr, len, HAL_MAX_DELAY);
+  for (int i = 0; i < len; i++)
+  {
+    while (!(huart3.Instance->ISR & UART_FLAG_TXE));
+    huart3.Instance->TDR = ptr[i];
+  }
   return len;
 }
 
 /**
   * @brief  Callback function called by TIM6 interrupt handler
-  * @note   This is called every 10ms (100Hz control loop frequency)
-  * @param  htim TIM handle pointer
-  * @retval None
   */
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
-  /* Check if TIM6 generated the interrupt */
   if (htim->Instance == TIM6)
   {
-    /* Call the motor PID control loop ISR */
     TIM6_Control_Loop_ISR();
   }
 }
 
 /**
-  * @brief  UART reception completion callback
-  * @param  huart UART handle
-  * @retval None
+  * @brief  UART reception completion callback (for huart3)
   */
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
   if (huart->Instance == USART3)
   {
-    // PRIORITY CHECK: ถ้าเป็น 'P' ให้สั่งงานหยุดทันที
-    if (rx_byte == 'P')
-    {
-      Motor_ProcessCommand('P');
-    }
+    if (rx_byte == 'P') Motor_ProcessCommand('P');
 
-    // ตรวจสอบตัวจบข้อความ
     if (rx_byte == '\n' || rx_byte == '\r')
     {
       if (rx_index > 0)
       {
         rx_buffer[rx_index] = '\0';
-        
-        // Command (ตัวอักษรที่ 0) - ถ้าไม่ใช่ 'P' (เพราะ process ไปแล้ว)
-        if (rx_buffer[0] != 'P') {
-          Motor_ProcessCommand(rx_buffer[0]);
-        }
-        
-        // Connection Status (ตัวอักษรที่ 2)
-        if (rx_index >= 3) {
-          Motor_SetConnectionStatus(rx_buffer[2] == 'C');
-        }
-        
+        if (rx_buffer[0] != 'P') Motor_ProcessCommand(rx_buffer[0]);
+        if (rx_index >= 3) Motor_SetConnectionStatus(rx_buffer[2] == 'C');
         rx_index = 0;
         HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
       }
     }
     else
     {
-      // เก็บข้อมูลลง Buffer
-      if (rx_index < (sizeof(rx_buffer) - 1))
-      {
-        rx_buffer[rx_index++] = rx_byte;
-      }
-      
-      // เมื่อได้รับครบ 3 ตัวอักษร ให้ประมวลผลทันทีเพื่อลด latency
+      if (rx_index < (sizeof(rx_buffer) - 1)) rx_buffer[rx_index++] = rx_byte;
       if (rx_index >= 3)
       {
         rx_buffer[rx_index] = '\0';
-        
-        // Update M and Y button status (for 3s hold detection)
         Motor_UpdateModeButton(rx_buffer[0] == 'M');
         Motor_UpdateSelectionButton(rx_buffer[0] == 'Y');
         Motor_UpdateControlModeButton(rx_buffer[0] == 'B');
-
-        // Command (ตัวอักษรที่ 0)
         Motor_ProcessCommand(rx_buffer[0]);
-        
-        // Connection Status (ตัวอักษรที่ 2)
         Motor_SetConnectionStatus(rx_buffer[2] == 'C');
-        
         rx_index = 0;
       }
     }
-
-    // รับค่าตัวต่อไป
     HAL_UART_Receive_IT(&huart3, &rx_byte, 1);
   }
 }
@@ -310,7 +342,6 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
-  /* User can add his own implementation to report the HAL error return state */
   __disable_irq();
   while (1)
   {
